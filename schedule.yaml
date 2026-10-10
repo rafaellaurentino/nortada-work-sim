@@ -1,0 +1,54 @@
+# Rotina diária simulada (horário local). Domingo (6) é folga: escala 6x1.
+# weekday: 0=segunda ... 6=domingo
+timezone: America/Sao_Paulo
+days_off: [6]
+
+# action: tickets | pressao | cobranca
+# chance: probabilidade de o evento acontecer no dia (padrão 1.0)
+# weekdays: restringe a dias específicos (opcional)
+slots:
+  - name: manha_daily
+    time: "08:30"
+    action: tickets
+    intro: "Bom dia! Essa é a fila de hoje. Prioridade na ordem em que enviei. Qualquer dúvida, pergunta aqui."
+    items:
+      - {kind: adhoc, difficulty: facil}
+      - {kind: adhoc, difficulty: medio}
+
+  - name: mid_manha_stakeholder
+    time: "10:30"
+    action: tickets
+    chance: 0.7
+    items:
+      - {kind: adhoc, difficulty: facil}
+
+  - name: tarde_demanda
+    time: "13:30"
+    action: tickets
+    intro: "Boa tarde! Chegou mais uma demanda que não dá pra empurrar."
+    items:
+      - {kind: pipeline, difficulty: medio}
+
+  - name: pressao_tarde
+    time: "15:45"
+    action: pressao
+    chance: 0.8
+
+  - name: incidente_fim_do_dia
+    time: "17:50"
+    action: tickets
+    chance: 0.35
+    items:
+      - {kind: incidente, difficulty: dificil}
+
+  - name: cobranca_documentos
+    time: "19:00"
+    action: cobranca
+
+  - name: entrevista_semanal
+    time: "19:30"
+    action: tickets
+    weekdays: [3]
+    intro: "Boa noite! Aqui é a Paula, da entrevista técnica. Esta semana você tem um desafio. Boa sorte!"
+    items:
+      - {kind: entrevista, difficulty: medio}

@@ -1,0 +1,434 @@
+# Banco de tickets de reserva (funciona mesmo sem IA configurada).
+# Campos: id, kind, difficulty (facil|medio|dificil), phase (1-8), persona, title, body, deliverable, notes_for_senior
+# kinds: adhoc, bug, pipeline, modelagem, qualidade, otimizacao, incidente, review, entrevista
+
+- id: C001
+  kind: adhoc
+  difficulty: facil
+  phase: 1
+  persona: marketing
+  title: "Top 10 categorias por receita em 2017"
+  body: |
+    Oi! Preciso pra reunião de amanhã: quais são as 10 categorias de produto que mais faturaram em 2017?
+    Quero o nome da categoria em inglês (a tabela de tradução existe, certo?) e a receita total de cada.
+    Pode ser só uma tabelinha mesmo.
+  deliverable: "Query SQL + tabela com as 10 categorias, receita e breve nota sobre como a receita foi calculada."
+  notes_for_senior: >
+    Receita = soma de price (e frete? o aluno deve explicitar a escolha). Deve filtrar ano 2017 por
+    order_purchase_timestamp. Armadilha: pedidos cancelados/indisponíveis. Verificar se tratou categorias NULL
+    e se usou a tabela de tradução com LEFT JOIN.
+
+- id: C002
+  kind: adhoc
+  difficulty: facil
+  phase: 1
+  persona: financeiro
+  title: "Receita mensal por tipo de pagamento"
+  body: |
+    Preciso do valor pago por mês, separado por tipo de pagamento (cartão, boleto, voucher etc.).
+    Quero ver se o boleto está perdendo espaço. Pode me mandar até o fim do dia?
+  deliverable: "Query SQL + tabela mês x tipo de pagamento + 2 linhas de conclusão sobre a tendência do boleto."
+  notes_for_senior: >
+    Usar order_payments.payment_value (valor pago), não price. Join com orders para a data. Discutir se pedidos
+    cancelados entram. Verificar se o aluno percebeu que um pedido pode ter vários pagamentos.
+
+- id: C003
+  kind: adhoc
+  difficulty: facil
+  phase: 1
+  persona: operacoes
+  title: "Percentual de pedidos entregues com atraso por estado"
+  body: |
+    O SLA de entrega está estourando e todo mundo reclama. Preciso saber qual % dos pedidos chegou depois da
+    data estimada, por estado do cliente. Só pedidos entregues, claro. Quais estados estão piores?
+  deliverable: "Query SQL + ranking de estados + comentário sobre o que olhar a seguir."
+  notes_for_senior: >
+    Atraso = order_delivered_customer_date > order_estimated_delivery_date. Filtrar order_status = 'delivered' e
+    ignorar nulos de data. Join com customers para estado. Verificar uso de CASE WHEN e AVG/COUNT corretos.
+
+- id: C004
+  kind: bug
+  difficulty: facil
+  phase: 1
+  persona: gerente
+  title: "Ticket médio do dashboard está quase o dobro do real"
+  body: |
+    O Carlos reclamou: o ticket médio no Metabase está bem acima do que o financeiro calcula. Segue a query
+    que alimenta o card:
+
+    SELECT AVG(i.price + i.freight_value + p.payment_value) AS ticket_medio
+    FROM nortada.order_items i
+    JOIN nortada.order_payments p ON p.order_id = i.order_id;
+
+    Descobre o que está errado e me traz uma versão corrigida, explicando a causa.
+  deliverable: "Diagnóstico da causa, query corrigida e prova (contagens/valores antes e depois)."
+  notes_for_senior: >
+    Causa: fan-out — join de order_items com order_payments multiplica linhas e soma conceitos diferentes
+    (price+frete e payment_value). Solução: agregar por order_id em CTEs antes de juntar, ou usar apenas
+    order_payments. Verificar se validou reconciliando com SUM(payment_value)/COUNT(DISTINCT order_id).
+
+- id: C005
+  kind: adhoc
+  difficulty: medio
+  phase: 1
+  persona: marketing
+  title: "Taxa de recompra dos clientes"
+  body: |
+    Estou montando a campanha de fidelidade. Qual % dos clientes comprou mais de uma vez? E qual categoria
+    é mais comprada na primeira compra de quem volta? Preciso pra reunião das 15h!
+  deliverable: "Queries + números + explicação de como você identificou \"cliente\" na base."
+  notes_for_senior: >
+    Pegadinha central: customer_id é por pedido; a pessoa é customer_unique_id. Quem usar customer_id vai
+    achar ~0% de recompra. Verificar uso de window function (ROW_NUMBER) para achar o primeiro pedido.
+
+- id: C006
+  kind: adhoc
+  difficulty: medio
+  phase: 1
+  persona: gerente
+  title: "Ranking de vendedores por estado com tempo médio de envio"
+  body: |
+    Preciso de um ranking dos vendedores por receita DENTRO de cada estado (top 3 de cada), junto com o tempo
+    médio entre a aprovação do pedido e a entrega à transportadora. Vamos usar isso numa conversa com os
+    vendedores atrasados. Me avisa se achar algo estranho nos dados.
+  deliverable: "Query com window function + top 3 por estado + lista de anomalias encontradas nos dados."
+  notes_for_senior: >
+    Usar RANK/ROW_NUMBER particionado por seller_state. Tempo = order_delivered_carrier_date - order_approved_at
+    (tratar nulos e valores negativos). Avaliar se o aluno reportou anomalias (datas incoerentes) sem ser
+    lembrado.
+
+- id: C007
+  kind: qualidade
+  difficulty: medio
+  phase: 1
+  persona: gerente
+  title: "Auditoria de qualidade da tabela orders"
+  body: |
+    Antes de publicar qualquer dashboard novo, quero uma auditoria da tabela orders: nulos por coluna,
+    pedidos duplicados, datas incoerentes (ex.: entregue antes de comprado) e status esquisitos. Me traga um
+    relatório com os problemas por gravidade e uma recomendação do que tratar primeiro.
+  deliverable: "Queries de auditoria + relatório priorizado (severidade, volume afetado, recomendação)."
+  notes_for_senior: >
+    Verificar se há contagem e percentual (não só existência), se priorizou por impacto no negócio, e se
+    separou "dado ruim" de "regra de negócio" (ex.: nulos esperados em pedidos não entregues).
+
+- id: C008
+  kind: adhoc
+  difficulty: facil
+  phase: 1
+  persona: gerente
+  title: "Dicionário de dados das tabelas principais"
+  body: |
+    Você é o mais novo do time, então tem o olhar fresco: preciso de um dicionário de dados de orders,
+    order_items e order_payments. Para cada coluna: significado, tipo, exemplo, nulos permitidos e
+    armadilhas conhecidas. Vai servir para os próximos que entrarem.
+  deliverable: "Documento (markdown) com o dicionário das 3 tabelas e uma seção de \"armadilhas\"."
+  notes_for_senior: >
+    Avaliar clareza e se o aluno descobriu armadilhas reais (customer_id x customer_unique_id, múltiplos
+    pagamentos por pedido, itens por pedido). Exemplos devem ser reais, extraídos dos dados.
+
+- id: C009
+  kind: otimizacao
+  difficulty: medio
+  phase: 2
+  persona: gerente
+  title: "Query do relatório mensal demorando demais"
+  body: |
+    O relatório mensal de vendas por categoria está levando uns 40 segundos. Segue a query:
+
+    SELECT t.product_category_name_english,
+           (SELECT SUM(i.price) FROM nortada.order_items i
+              JOIN nortada.orders o ON o.order_id = i.order_id
+             WHERE i.product_id IN (SELECT product_id FROM nortada.products p
+                                     WHERE p.product_category_name = t.product_category_name)
+               AND EXTRACT(YEAR FROM o.order_purchase_timestamp) = 2017) AS receita_2017
+    FROM nortada.product_category_name_translation t;
+
+    Quero entender por que está lenta e ver uma versão mais rápida, com EXPLAIN ANALYZE antes e depois.
+  deliverable: "EXPLAIN ANALYZE antes/depois, causa da lentidão, query reescrita e índices sugeridos com justificativa."
+  notes_for_senior: >
+    Subqueries correlacionadas, função em coluna de data impedindo uso de índice (usar intervalo de datas).
+    Reescrever com JOIN + GROUP BY. Avaliar se mediu antes/depois e se justificou índices sem exagerar.
+
+- id: C010
+  kind: modelagem
+  difficulty: medio
+  phase: 2
+  persona: gerente
+  title: "Modelar star schema de vendas"
+  body: |
+    Vamos criar a camada analítica de vendas. Desenhe um star schema para vendas: tabela fato e dimensões
+    (cliente, produto, vendedor, data). Defina a granularidade da fato com cuidado e me entregue o DDL em
+    PostgreSQL, mais um diagrama simples (pode ser texto/mermaid).
+  deliverable: "DDL, diagrama, definição de granularidade e justificativa das chaves."
+  notes_for_senior: >
+    Granularidade esperada: 1 linha por item de pedido. Verificar chaves substitutas vs naturais, dim_data,
+    onde ficam frete/pagamento (pagamento não está no grão do item — discutir). Avaliar se tratou
+    customer_unique_id.
+
+- id: C011
+  kind: modelagem
+  difficulty: dificil
+  phase: 2
+  persona: gerente
+  title: "SCD tipo 2 para dimensão de vendedor"
+  body: |
+    Vendedores mudam de cidade/estado e a gente perde o histórico. Quero que dim_vendedor passe a guardar
+    histórico (SCD tipo 2). Implemente a estrutura e o script SQL que processa uma carga nova: fecha o
+    registro antigo e abre o novo quando cidade ou estado mudam. Simule 3 mudanças para provar que funciona.
+  deliverable: "DDL, script de carga, dados de teste com as 3 mudanças simuladas e prova de histórico correto."
+  notes_for_senior: >
+    Colunas valid_from/valid_to/is_current, chave substituta. Verificar idempotência (rodar duas vezes não
+    duplica), tratamento de nulos na comparação e teste das 3 mudanças.
+
+- id: C012
+  kind: pipeline
+  difficulty: facil
+  phase: 2
+  persona: gerente
+  title: "Converter CSV para Parquet e comparar"
+  body: |
+    Quero entender se vale a pena guardar os dados em Parquet. Pegue o CSV de order_items, converta para
+    Parquet com Python e compare: tamanho em disco e tempo de uma agregação simples em cada formato.
+    Traga os números e uma recomendação.
+  deliverable: "Script Python, tabela de comparação (tamanho/tempo) e recomendação em 5 linhas."
+  notes_for_senior: >
+    Avaliar medição justa (várias execuções, mesma máquina), explicação de formato colunar e limites da
+    conclusão (dataset pequeno).
+
+- id: C013
+  kind: pipeline
+  difficulty: medio
+  phase: 3
+  persona: gerente
+  title: "Carga idempotente de CSV para o Postgres"
+  body: |
+    Hoje a carga dos CSVs é manual e, quando alguém roda duas vezes, duplica tudo. Escreva um script Python
+    que carregue order_items no Postgres de forma idempotente (rodar N vezes = mesmo resultado), com log
+    do que fez e tratamento de erro. Explique como garante a idempotência.
+  deliverable: "Script Python, evidência de rodar duas vezes sem duplicar e explicação da estratégia."
+  notes_for_senior: >
+    Estratégias aceitáveis: truncate+load, upsert com chave única, tabela de staging + merge. Verificar
+    credenciais fora do código (variáveis de ambiente), logging e commit transacional.
+
+- id: C014
+  kind: pipeline
+  difficulty: medio
+  phase: 3
+  persona: gerente
+  title: "Enriquecer calendário com feriados via API pública"
+  body: |
+    Marketing quer comparar vendas em dias de feriado. Crie uma tabela dim_data com um flag de feriado
+    nacional para 2016-2018. Use uma API pública (BrasilAPI tem endpoint de feriados — confira a
+    documentação atual) chamada por um script Python. Cuidado com falhas da API e limite de requisições.
+  deliverable: "Script Python, tabela dim_data populada e documento sobre tratamento de falhas da API."
+  notes_for_senior: >
+    Avaliar retries/timeout, cache local dos resultados, idempotência e se o aluno verificou o formato real
+    de resposta da API em vez de assumir.
+
+- id: C015
+  kind: pipeline
+  difficulty: dificil
+  phase: 3
+  persona: gerente
+  title: "Carga incremental diária de orders com watermark"
+  body: |
+    A carga completa de orders está pesada. Precisamos de carga incremental diária: só trazer o que mudou.
+    Desenhe e implemente (SQL + Python) usando watermark. Considere que pedidos antigos podem ser atualizados
+    depois (status muda de shipped para delivered). Simule 3 "dias" de carga para provar o comportamento.
+  deliverable: "Código, simulação de 3 dias com resultados e documento de decisões (watermark, atualizações atrasadas)."
+  notes_for_senior: >
+    Armadilhas: late-arriving updates, watermark em coluna que não reflete update, reprocessamento seguro.
+    Verificar idempotência e como o aluno lida com atualização (upsert) vs só inserção.
+
+- id: C016
+  kind: incidente
+  difficulty: dificil
+  phase: 1
+  persona: financeiro
+  title: "URGENTE — receita de ontem zerada no dashboard do diretor"
+  body: |
+    O dashboard do diretor está mostrando RECEITA ZERADA para ontem e a reunião é em 30 MINUTOS.
+    O que a gente sabe: a tabela diária de vendas tem 0 linhas para a data de ontem. Um colega mandou o
+    trecho do log do job:
+
+    [02:00:01] iniciando job vendas_diarias
+    [02:00:03] lendo orders onde order_status = 'delivered' AND order_delivered_customer_date::date = CURRENT_DATE - 1
+    [02:00:04] 0 linhas lidas
+    [02:00:04] gravando nortada.vendas_diarias: 0 linhas
+    [02:00:04] job finalizado com sucesso
+
+    Diagnostique, proponha uma correção imediata, explique a causa raiz e como evitar que se repita.
+  deliverable: "Post-mortem curto: linha do tempo, causa raiz, correção imediata, correção definitiva, prevenção."
+  notes_for_senior: >
+    Causa provável: a regra de negócio filtra por data de ENTREGA ao cliente e status delivered, não por data
+    de compra/aprovação; vendas de ontem ainda não foram entregues. Além disso o job reporta "sucesso" com 0
+    linhas (falta de alerta de volume). Avaliar se separou mitigação rápida de correção definitiva.
+
+- id: C017
+  kind: incidente
+  difficulty: medio
+  phase: 3
+  persona: operacoes
+  title: "Pipeline duplicou 12 mil pedidos após reexecução"
+  body: |
+    Reexecutaram o job de carga ontem à noite depois de uma falha e agora o relatório de volume de pedidos
+    está inflado: umas 12 mil linhas duplicadas em order_items. Preciso disso corrigido hoje, sem perder
+    nenhum pedido legítimo. Como você garante que não apaga dado bom e como evita que aconteça de novo?
+  deliverable: "Query para identificar duplicatas, procedimento seguro de deduplicação (com backup/transação) e prevenção."
+  notes_for_senior: >
+    Chave natural: (order_id, order_item_id). Verificar backup antes do DELETE, uso de transação, validação
+    de contagem após, e prevenção (constraint única + carga idempotente).
+
+- id: C018
+  kind: incidente
+  difficulty: dificil
+  phase: 4
+  persona: gerente
+  title: "DAG do Airflow falhando 3 madrugadas seguidas"
+  body: |
+    A DAG vendas_diarias falhou nas últimas 3 madrugadas. Segue o log resumido:
+
+    [2024-xx 02:00:05] task extrair_orders: SUCCESS (4m12s)
+    [2024-xx 02:04:20] task carregar_staging: SUCCESS (2m40s)
+    [2024-xx 02:07:01] task transformar_vendas: running...
+    [2024-xx 02:37:01] task transformar_vendas: FAILED — timeout (1800s excedido)
+    [2024-xx 02:37:01] retries: 0 de 0
+
+    Ninguém mexeu na DAG. Investigue, proponha causa provável, correções (curto e longo prazo)
+    e o que mudaria na configuração da DAG.
+  deliverable: "Análise de causa provável, plano de investigação, ajustes de DAG (retries, timeout, alertas) e post-mortem."
+  notes_for_senior: >
+    Esperar hipóteses (crescimento de volume, lock, query sem índice, recursos) e plano para confirmá-las.
+    Avaliar retries com backoff, alerta, idempotência da task e distinção entre sintoma e causa.
+
+- id: C019
+  kind: review
+  difficulty: medio
+  phase: 3
+  persona: gerente
+  title: "Code review do script do estagiário"
+  body: |
+    O estagiário abriu um PR com este script de carga e pediu revisão. Faz o review como se fosse para
+    produção: liste os problemas por severidade (crítico/médio/baixo) e sugira correções.
+
+    import psycopg2
+    conn = psycopg2.connect("host=prod-db user=admin password=Nortada@123 dbname=dw_nortada")
+    cur = conn.cursor()
+    for line in open("orders.csv"):
+        v = line.split(",")
+        cur.execute("INSERT INTO nortada.orders VALUES ('%s','%s','%s')" % (v[0], v[1], v[2]))
+    conn.commit()
+  deliverable: "Review estruturado: problemas por severidade, explicação do risco e sugestão de correção."
+  notes_for_senior: >
+    Problemas esperados: senha hardcoded, SQL injection por concatenação, parsing de CSV frágil (usar csv),
+    sem tratamento de erro/rollback, insert linha a linha (usar COPY/executemany), apontando para prod,
+    sem idempotência, cabeçalho tratado como dado. Avaliar priorização e tom construtivo.
+
+- id: C020
+  kind: qualidade
+  difficulty: dificil
+  phase: 7
+  persona: gerente
+  title: "Definir checks de qualidade para o pipeline de vendas"
+  body: |
+    Depois do incidente da receita zerada, a diretoria exige controles. Defina e implemente 8 checks de
+    qualidade para o pipeline de vendas (dbt tests ou SQL puro): cada check com severidade (bloqueia ou só
+    alerta), limiar e o que acontece quando falha. Priorize checks de volume, frescor e unicidade.
+  deliverable: "8 checks implementados, tabela de severidade/limiar e plano de alerta."
+  notes_for_senior: >
+    Esperar: volume mínimo diário, frescor, unicidade de chaves, nulos em campos críticos, integridade
+    referencial, valores negativos, reconciliação com fonte. Avaliar se evitou excesso de alertas.
+
+- id: C021
+  kind: adhoc
+  difficulty: dificil
+  phase: 1
+  persona: financeiro
+  title: "Receita do dashboard não bate com a do financeiro"
+  body: |
+    O dashboard diz uma receita para 2017 e a minha planilha diz outra, e eu preciso fechar o relatório
+    para a diretoria. Descubra de onde vem a diferença. Suspeito de frete, cancelados e parcelas,
+    mas não sei qual pesa mais. Quero uma tabela "ponte" explicando cada diferença em reais.
+  deliverable: "Tabela-ponte da diferença (por causa), queries usadas e recomendação de qual definição de receita adotar."
+  notes_for_senior: >
+    Comparar SUM(price), SUM(price+freight), SUM(payment_value) com e sem cancelados. O aluno deve explicar
+    cada definição e recomendar uma única definição oficial. Valorizar reconciliação numérica.
+
+- id: C022
+  kind: entrevista
+  difficulty: facil
+  phase: 1
+  persona: entrevistador
+  title: "Entrevista SQL ao vivo (20 min)"
+  body: |
+    Olá! Vamos fazer um exercício de SQL ao vivo, 20 minutos, usando as tabelas da Nortada.
+    1) Liste os clientes (customer_unique_id) que nunca tiveram um pedido entregue.
+    2) Para cada cliente, traga o segundo pedido mais caro (soma de price) — se existir.
+    3) Quantos pedidos tiveram mais de um tipo de pagamento diferente?
+    Pense em voz alta e explique cada decisão.
+  deliverable: "As 3 queries e uma explicação por escrito do raciocínio de cada uma."
+  notes_for_senior: >
+    Q1: anti-join/NOT EXISTS com cuidado com customer_id vs unique_id. Q2: DENSE_RANK/ROW_NUMBER por cliente.
+    Q3: COUNT(DISTINCT payment_type) > 1 por pedido. Avaliar clareza do raciocínio e tratamento de casos de borda.
+
+- id: C023
+  kind: entrevista
+  difficulty: medio
+  phase: 1
+  persona: entrevistador
+  title: "Entrevista Python ao vivo (20 min)"
+  body: |
+    Desafio de Python, 20 minutos. Você recebe uma lista de eventos:
+    [{"user": "a", "ts": "2018-01-01T10:15:00"}, {"user": "b", "ts": "2018-01-01T10:45:00"}, ...]
+    Escreva funções para: (1) contar eventos por hora, (2) remover eventos duplicados do mesmo usuário
+    no mesmo timestamp, (3) retornar os 3 usuários mais ativos. Explique a complexidade de cada uma.
+  deliverable: "Código Python com as 3 funções, exemplos de teste e análise de complexidade."
+  notes_for_senior: >
+    Esperar uso de dict/Counter, set para deduplicação, datetime.fromisoformat. Avaliar casos de borda
+    (lista vazia, timestamps inválidos) e clareza na explicação de complexidade.
+
+- id: C024
+  kind: entrevista
+  difficulty: medio
+  phase: 2
+  persona: entrevistador
+  title: "Entrevista de modelagem — plataforma de streaming"
+  body: |
+    Pergunta de modelagem: uma plataforma de streaming de vídeo quer analisar consumo de conteúdo.
+    Modele o banco analítico (fatos e dimensões). Quais perguntas de negócio ele deve responder?
+    Como lidaria com um usuário que muda de plano ao longo do tempo? Tempo: 25 minutos.
+  deliverable: "Diagrama (texto/mermaid), definição de granularidade e resposta sobre mudança de plano (SCD)."
+  notes_for_senior: >
+    Fato de visualização (grão: sessão ou evento de play), dim_usuario, dim_conteudo, dim_data, dim_plano.
+    Mudança de plano → SCD tipo 2. Avaliar se começou pelas perguntas de negócio antes de desenhar.
+
+- id: C025
+  kind: entrevista
+  difficulty: dificil
+  phase: 3
+  persona: entrevistador
+  title: "Entrevista de design de pipeline (30 min)"
+  body: |
+    Cenário: um app gera 5 milhões de eventos de clique por dia e a diretoria quer um dashboard com no
+    máximo 15 minutos de atraso. Desenhe o pipeline de ponta a ponta: ingestão, armazenamento,
+    transformação e consumo. Batch ou streaming? Por quê? O que pode dar errado e como você monitora?
+  deliverable: "Diagrama, escolhas justificadas (com alternativas), riscos e plano de monitoramento."
+  notes_for_senior: >
+    Aceitar micro-batch ou streaming simples com justificativa. Avaliar custo/complexidade, tratamento de
+    eventos duplicados/atrasados, idempotência e monitoramento. Para júnior, clareza vale mais que
+    sofisticação.
+
+- id: C026
+  kind: entrevista
+  difficulty: facil
+  phase: 8
+  persona: entrevistador
+  title: "Entrevista comportamental — conte sobre um erro"
+  body: |
+    Pergunta comportamental: conte sobre uma vez em que você errou em um projeto (pode ser pessoal ou da
+    faculdade). Use o formato Situação, Tarefa, Ação e Resultado. O que você faria diferente hoje?
+  deliverable: "Resposta escrita em formato STAR (máx. 1 página) e 3 aprendizados."
+  notes_for_senior: >
+    Avaliar honestidade, ownership e aprendizado concreto. Evitar respostas que culpam terceiros ou
+    "meu defeito é ser perfeccionista".
